@@ -1,0 +1,43 @@
+# ==============================================================================
+# Git Ignore - AI Customer Support Avatar Project
+# ==============================================================================
+
+# Environment & Secrets (CRITICAL: Never commit real credentials)
+.env
+.env.*
+*.env
+!.env.example
+*.pem
+*.key
+*.cert
+secrets/
+
+# Python Virtual Environments & Packages
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# IDE, Editor & Agent Local Configs
+.vscode/
+.idea/
+.agents/
+skills-lock.json
+pyrightconfig.json
+
+# Operating System & Cache Files
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# Logs & Runtime Dumps
+*.log

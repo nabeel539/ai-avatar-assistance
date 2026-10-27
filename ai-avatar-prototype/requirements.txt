@@ -1,0 +1,4 @@
+livekit-agents[openai,silero]~=1.8
+livekit-plugins-synthesia~=1.8
+python-dotenv>=1.0.0
+aiohttp>=3.9.0

@@ -1,0 +1,114 @@
+{
+  "company": {
+    "name": "Apex Cloud Solutions",
+    "description": "Apex Cloud Solutions provides secure cloud hosting, automated deployment pipelines, enterprise cloud migrations, and AI customer operations platforms for modern businesses.",
+    "support_hours": "Monday to Friday, 9:00 AM to 6:00 PM IST",
+    "website": "https://apexsolutions.demo"
+  },
+  "services": [
+    {
+      "id": "cloud-migration",
+      "name": "Managed Cloud Migration",
+      "description": "Zero-downtime migration from AWS, GCP, Azure, or on-premise infrastructure with dedicated architect oversight.",
+      "benefits": ["Zero data loss guarantee", "Assisted cutover testing", "Cost optimization audit"],
+      "keywords": ["migration", "migrate", "transfer", "shift", "aws", "gcp", "azure", "on premise", "switch"]
+    },
+    {
+      "id": "devops-pipelines",
+      "name": "Automated DevOps & CI/CD",
+      "description": "Production-ready GitOps deployment pipelines, container orchestration, and automated canary deployments.",
+      "benefits": ["Instant git-push deploy", "Automated rollbacks", "Docker & Kubernetes native"],
+      "keywords": ["devops", "ci/cd", "pipeline", "docker", "kubernetes", "deploy", "gitops", "automation"]
+    },
+    {
+      "id": "security-compliance",
+      "name": "Enterprise Security & SOC-2 Auditing",
+      "description": "Continuous vulnerability scanning, TLS 1.3 encryption, SOC-2 Type II audit logs, and DDoS mitigation.",
+      "benefits": ["SOC-2 & ISO-27001 readiness", "Real-time threat monitoring", "Encrypted backups"],
+      "keywords": ["security", "soc2", "audit", "compliance", "ddos", "encryption", "safe", "firewall"]
+    },
+    {
+      "id": "disaster-recovery",
+      "name": "Global Disaster Recovery & Replication",
+      "description": "Active-active multi-region replication ensuring sub-minute RTO and high fault tolerance against outages.",
+      "benefits": ["Cross-region failover", "99.99% uptime guarantee", "Automated snapshot recovery"],
+      "keywords": ["disaster recovery", "backup", "replication", "failover", "uptime", "outage"]
+    }
+  ],
+  "faqs": [
+    {
+      "id": "refund-policy",
+      "question": "What is your refund and return policy?",
+      "answer": "We offer a 30-day money-back guarantee on all subscription plans. If you are not satisfied within the first 30 days of service, contact support for a 100% full refund.",
+      "keywords": ["refund", "return", "money-back", "cancel", "guarantee", "paise wapas", "refund policy"]
+    },
+    {
+      "id": "deployment-time",
+      "question": "How long does deployment and setup take?",
+      "answer": "Starter and Pro plans deploy instantly within 5 to 10 minutes. Custom Enterprise setups typically take 1 to 2 business days with our assisted onboarding team.",
+      "keywords": ["deployment", "setup", "how long", "delivery", "onboarding", "kitna time", "time"]
+    },
+    {
+      "id": "data-security",
+      "question": "Where is my data stored and is it secure?",
+      "answer": "All data is encrypted in transit with TLS 1.3 and at rest with AES-256. We are SOC-2 Type II certified and host data in ISO-compliant regional data centers.",
+      "keywords": ["security", "encryption", "soc2", "privacy", "data store", "safe"]
+    },
+    {
+      "id": "support-channels",
+      "question": "How can I contact human customer support?",
+      "answer": "You can reach our human support team directly via email at support@apexsolutions.demo or call us at +1 (800) 555-APEX during business hours.",
+      "keywords": ["human", "contact", "support", "talk to human", "phone", "email", "madad", "help"]
+    }
+  ],
+  "products": [
+    {
+      "id": "starter-plan",
+      "name": "Starter Cloud",
+      "description": "Ideal for small teams, startups, and developers looking for automated cloud hosting.",
+      "price": "$29 per month",
+      "billing": "Monthly or annual ($290/yr)",
+      "features": [
+        "2 vCPU / 4 GB RAM dedicated compute",
+        "Automated CI/CD deployment pipelines",
+        "Community support & documentation",
+        "99.9% uptime SLA"
+      ],
+      "keywords": ["starter", "basic", "cheap", "entry", "small", "chota plan", "29"]
+    },
+    {
+      "id": "pro-plan",
+      "name": "Pro Business",
+      "description": "High-performance infrastructure tailored for scaling applications with 24/7 priority monitoring.",
+      "price": "$99 per month",
+      "billing": "Monthly or annual ($990/yr)",
+      "features": [
+        "8 vCPU / 16 GB RAM with auto-scaling",
+        "Real-time DDoS protection & SSL",
+        "24/7 Priority email & chat support",
+        "99.99% uptime SLA"
+      ],
+      "keywords": ["pro", "business", "scale", "popular", "99", "pro plan"]
+    },
+    {
+      "id": "enterprise-plan",
+      "name": "Enterprise Suite",
+      "description": "Dedicated infrastructure with custom SLA, VPC peering, and a designated account engineer.",
+      "price": "Custom pricing (starts at $499/mo)",
+      "billing": "Annual contract with tailored invoicing",
+      "features": [
+        "Dedicated isolated multi-region nodes",
+        "SOC-2 / HIPAA compliance tooling",
+        "Dedicated Technical Account Manager",
+        "15-minute response SLA guarantee"
+      ],
+      "keywords": ["enterprise", "custom", "corporate", "large", "dedicated", "bada plan"]
+    }
+  ],
+  "support": {
+    "email": "support@apexsolutions.demo",
+    "phone": "+1 (800) 555-APEX",
+    "hours": "Mon-Fri 9:00 AM - 6:00 PM IST",
+    "message": "For escalated or personalized support, our human engineers are available via email or phone."
+  }
+}
