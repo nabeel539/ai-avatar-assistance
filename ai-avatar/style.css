@@ -822,6 +822,14 @@ h1, h2, h3, h4 {
 
 .avatar-canvas {
   background: transparent !important;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.avatar-canvas:active,
+.avatar-canvas.grabbing {
+  cursor: grabbing;
 }
 
 .video-placeholder {

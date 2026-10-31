@@ -51,6 +51,16 @@ export class Avatar3D {
         // Realistic grounding contact shadow
         this.contactShadow = null;
 
+        // Interactive 3D Turntable (Mouse/Touch Drag Rotation)
+        this.defaultRotationY = -0.32; // Calibrated presentation stance facing content
+        this.targetRotationY = -0.32;
+        this.currentRotationY = -0.32;
+        this.isDragging = false;
+        this.previousPointerX = 0;
+        this.dragVelocity = 0;
+        this.autoResetTimer = 0;
+        this.autoResetDelay = 3.0; // Seconds after release before smoothly easing back
+
         // Animation actions & speaking motion
         this.actions = {};
         this.currentAction = null;
@@ -150,6 +160,9 @@ export class Avatar3D {
     }
 
     setupEvents() {
+        // Interactive 3D mouse drag rotation
+        this.setupInteractionEvents();
+
         // Resize observer to keep full-body framing sharp inside widget wrapper
         const resizeObserver = new ResizeObserver(() => this.onResize());
         if (this.canvas.parentElement) {
@@ -164,6 +177,55 @@ export class Avatar3D {
                 this.clock.start();
             }
         });
+    }
+
+    setupInteractionEvents() {
+        if (!this.canvas) return;
+
+        this.canvas.title = 'Click and drag horizontally to rotate 3D avatar';
+
+        const onPointerDown = (e) => {
+            this.isDragging = true;
+            this.previousPointerX = e.clientX;
+            this.dragVelocity = 0;
+            this.autoResetTimer = 0;
+            if (this.canvas.setPointerCapture) {
+                try {
+                    this.canvas.setPointerCapture(e.pointerId);
+                } catch (_) {}
+            }
+            this.canvas.classList.add('grabbing');
+        };
+
+        const onPointerMove = (e) => {
+            if (!this.isDragging) return;
+            const deltaX = e.clientX - this.previousPointerX;
+            this.previousPointerX = e.clientX;
+
+            // Sensitivity factor: horizontal drag rotates model around vertical Y-axis
+            const sensitivity = 0.010;
+            this.targetRotationY += deltaX * sensitivity;
+            this.dragVelocity = deltaX * sensitivity;
+            this.autoResetTimer = 0;
+        };
+
+        const onPointerUp = (e) => {
+            if (!this.isDragging) return;
+            this.isDragging = false;
+            if (this.canvas.releasePointerCapture) {
+                try {
+                    this.canvas.releasePointerCapture(e.pointerId);
+                } catch (_) {}
+            }
+            this.canvas.classList.remove('grabbing');
+            // Start countdown to smoothly return to default presentation view
+            this.autoResetTimer = this.autoResetDelay;
+        };
+
+        this.canvas.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerUp);
     }
 
     updateCameraFraming() {
@@ -270,10 +332,9 @@ export class Avatar3D {
             // Plant feet exactly at ground level (y = 0)
             this.model.position.set(0, -box.min.y, 0);
 
-            // ORIENTATION FIX:
-            // Since avatar sits on bottom-right, orient the model ~18 degrees towards the LEFT
-            // (towards the website content in the center of the viewport).
-            this.model.rotation.y = -0.32;
+            // Keep model internal rotation at 0; orientation is driven by avatarGroup
+            this.model.rotation.y = 0;
+            this.avatarGroup.rotation.y = this.currentRotationY;
 
             // Traverse to collect morph meshes, skeletal bones, and enable shadows
             this.model.traverse((child) => {
@@ -475,6 +536,10 @@ export class Avatar3D {
         this.pointingDuration = durationSec;
         this.pointingTimer = durationSec;
         this.targetPointingWeight = 1.0;
+
+        // Smoothly glide avatar back to default presentation stance so pointing gesture aligns with content
+        this.targetRotationY = this.defaultRotationY;
+        this.autoResetTimer = 0;
     }
 
     updatePointingGesture(delta) {
@@ -525,6 +590,38 @@ export class Avatar3D {
             // Natural glance toward the content while explaining
             this.headBone.rotation.y = THREE.MathUtils.lerp(this.headBone.rotation.y, -0.16, this.pointingWeight * 0.4);
         }
+    }
+
+    // =========================================================================
+    // Interactive 3D Turntable Rotation (Drag, Inertia & Smart Auto-Return)
+    // =========================================================================
+
+    updateRotation(delta) {
+        if (!this.avatarGroup) return;
+
+        if (this.isDragging) {
+            // Actively track cursor drag with responsive smoothing
+            this.currentRotationY = THREE.MathUtils.lerp(this.currentRotationY, this.targetRotationY, 0.40);
+        } else {
+            // Apply natural inertial deceleration
+            if (Math.abs(this.dragVelocity) > 0.0001) {
+                this.targetRotationY += this.dragVelocity;
+                this.dragVelocity *= 0.88; // decay
+            }
+
+            // Auto-return timer countdown
+            if (this.autoResetTimer > 0) {
+                this.autoResetTimer -= delta;
+            } else {
+                // Smoothly ease back to default presentation stance facing content
+                this.targetRotationY = THREE.MathUtils.lerp(this.targetRotationY, this.defaultRotationY, delta * 1.8);
+            }
+
+            this.currentRotationY = THREE.MathUtils.lerp(this.currentRotationY, this.targetRotationY, delta * 7.0);
+        }
+
+        // Apply rotation to avatar group (character + contact shadow turn synchronously)
+        this.avatarGroup.rotation.y = this.currentRotationY;
     }
 
     // =========================================================================
@@ -695,10 +792,13 @@ export class Avatar3D {
             this.mixer.update(delta);
         }
 
-        // 2. Pointing gesture overlay towards referenced content (if triggered)
+        // 2. Interactive 3D Turntable Rotation with Inertia & Auto-return
+        this.updateRotation(delta);
+
+        // 3. Pointing gesture overlay towards referenced content (if triggered)
         this.updatePointingGesture(delta);
 
-        // 3. Audio-amplitude Driven Mouth Movement
+        // 4. Audio-amplitude Driven Mouth Movement
         this.updateMouthAnimation(delta);
 
         // 3. Talking Animation Gesture Rotation (with natural phrasing duration)

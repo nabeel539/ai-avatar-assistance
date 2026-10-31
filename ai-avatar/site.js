@@ -179,11 +179,17 @@ window.SITE = {
     console.log('[LiveKit Bridge] 3D Avatar is ready.');
   });
 
-  // Clicking avatar preview triggers explanatory gesture to content
+  // Quick click on avatar triggers explanatory gesture; dragging rotates the 3D model
   if (canvasElem) {
-    canvasElem.style.cursor = 'pointer';
-    canvasElem.title = 'Click avatar to preview content gesture';
-    canvasElem.addEventListener('click', () => {
+    let downX = 0;
+    let downY = 0;
+    canvasElem.addEventListener('pointerdown', (e) => {
+      downX = e.clientX;
+      downY = e.clientY;
+    });
+    canvasElem.addEventListener('click', (e) => {
+      const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+      if (moved > 6) return; // User dragged to rotate, not a static click
       if (window.avatar3d && typeof window.avatar3d.pointToContent === 'function') {
         window.avatar3d.pointToContent(4.0);
       }
