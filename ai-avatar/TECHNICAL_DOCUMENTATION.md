@@ -113,7 +113,9 @@ The agent (`SupportAgent` in `agent.py`) uses function calling with prompt instr
   - Uses browser Web Audio `AnalyserNode` connected to the remote incoming WebRTC audio track (isolated from output destination to prevent echo).
   - Calculates Root Mean Square (RMS) amplitude in real time: $\text{RMS} = \sqrt{\frac{1}{N} \sum (x_i - 128)^2 / 128^2}$.
   - Dynamically drives the Ready Player Me `jawOpen` morph target with smooth linear interpolation and non-linear speech curve, complemented by persistent micro-smiling (`mouthSmile = 0.14`) and automatic natural eye blinking every 2–4.5s.
-- **Facing Orientation**: Avatar is stationed at the bottom-right corner and yaw-rotated by `-0.32` rad (~18°) toward the center of the viewport, naturally welcoming the viewer.
+- **Facing Orientation & Interactive 360° Turntable**:
+  - Default orientation: Stationed at the bottom-right corner and yaw-rotated by `-0.32` rad (~18°) toward the center of the viewport, naturally welcoming the viewer.
+  - **3D Mouse/Touch Turntable**: Users can click and drag horizontally on the character to rotate her 360° in real-time WebGL, inspecting the model from any angle. Includes rotational inertia with exponential velocity decay, cursor styling (`grab`/`grabbing`), and a smart auto-reset timer (3.0s) that smoothly glides her back to the presentation stance so she never stays stuck facing backward.
 
 ---
 
