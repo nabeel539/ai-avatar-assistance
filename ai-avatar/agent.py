@@ -1,7 +1,7 @@
-"""AI Customer Support Avatar - LiveKit Agent with Synthesia Integration.
+"""AI Customer Support Avatar - LiveKit Agent with 3D Interactive Avatar.
 
 Architecture:
-    Mic -> Silero VAD -> OpenAI STT -> LLM (gpt-4o-mini + Tools) -> OpenAI TTS -> Synthesia Avatar -> Browser
+    Mic -> Silero VAD -> OpenAI/Cartesia STT -> LLM (Groq / Tools) -> TTS -> LiveKit Audio -> Browser (3D Avatar)
 
 Supported Languages:
     - English
@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
+from livekit import rtc
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -30,7 +31,7 @@ from livekit.agents import (
     function_tool,
     inference,
 )
-from livekit.plugins import openai, silero, synthesia
+from livekit.plugins import openai, silero
 
 # Load environment variables from .env file
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
@@ -120,7 +121,7 @@ def simple_search_knowledge(query: str) -> Dict[str, Any]:
 # Conversational instructions with strict guardrails and multilingual support
 INSTRUCTIONS = """\
 You are Alex, an AI customer support specialist for Apex Cloud Solutions.
-You are embodied as a real-time conversational video avatar on the company website.
+You are embodied as a real-time 3D interactive avatar guide on the company website.
 
 COMMUNICATION STYLE:
 - Spoken conversation: Keep answers to 1 to 3 concise, clear sentences.
@@ -148,14 +149,19 @@ KNOWLEDGE BOUNDARIES:
 - Never invent pricing, return policies, feature guarantees, or delivery timelines.
 - If you do not have specific information or the user asks for something outside your knowledge, acknowledge it gracefully and offer human support at support@apexsolutions.demo.
 
-TOOL USAGE:
-- Do NOT call any tools during the initial greeting. The user must start at the top hero section.
-- Use tools only when the user specifically asks to see, navigate to, or highlight a section or plan:
-  * navigate_to: When the user asks to see a section (services, products, pricing, faq, contact).
-  * highlight_element: When zeroing in on a specific card (cloud-migration, devops-pipelines, security-compliance, disaster-recovery, starter-plan, pro-plan, enterprise-plan, contact-card, refund-faq).
-  * search_services: To look up enterprise services (migration, devops, security, disaster recovery).
-  * search_products: To look up exact product specs and pricing.
-  * escalate_to_human: When customer asks to speak with a human or has an unresolvable issue.
+TOOL USAGE & VISUAL WEBSITE GUIDANCE (CRITICAL):
+- Do NOT call any tools during the initial greeting. The user starts at the hero section.
+- You are an interactive visual website guide. When the user asks about specific plans, services, pricing, FAQs, or support, ALWAYS guide them visually by navigating to or highlighting the section while explaining it:
+  * "Show me the Pro Plan" / "Tell me about Pro" -> Call highlight_element("pro-plan") and explain Pro Business features and price ($99/mo).
+  * "Tell me about your services" / "Show features" -> Call navigate_to("services") and explain services.
+  * "Show me pricing" / "What are the prices?" -> Call navigate_to("pricing") and explain the pricing tiers.
+  * "Tell me about the Enterprise Plan" -> Call highlight_element("enterprise-plan") and explain enterprise clusters and SLAs.
+  * "Tell me about security compliance" -> Call highlight_element("security-compliance") and explain SOC-2 and encryption.
+  * "Tell me about cloud migration" -> Call highlight_element("cloud-migration") and explain zero-downtime migration.
+  * "Take me to FAQ" -> Call navigate_to("faq") and explain FAQs.
+  * "How do I contact support?" / "Contact admin" -> Call highlight_element("contact-card") and explain human support channels.
+- Conversational Guardrail: For purely conversational queries (e.g. "Hi, how are you?", "What does your company do?", "Thank you"), answer directly WITHOUT calling navigation tools.
+- Never pause speaking while navigating: the page scrolls smoothly while you continue speaking your explanation naturally in 1-3 sentences.
 """
 
 
@@ -189,10 +195,10 @@ class SupportAgent(Agent):
 
     @function_tool
     async def highlight_element(self, element_id: str) -> str:
-        """Highlight a specific plan card or contact element on the page.
+        """Highlight a specific plan card, service card, or contact element on the page.
         
         Args:
-            element_id: Target element id. Must be one of: starter-plan, pro-plan, enterprise-plan, contact-card, refund-faq.
+            element_id: Target element id. Must be one of: starter-plan, pro-plan, enterprise-plan, cloud-migration, devops-pipelines, security-compliance, disaster-recovery, contact-card, refund-faq.
         """
         clean_id = element_id.strip().lower()
         if clean_id not in ALLOWED_ELEMENTS:
@@ -291,36 +297,34 @@ async def entrypoint(ctx: JobContext) -> None:
         },
     )
 
-    # 2. Synthesia Avatar Integration
-    avatar_id = os.getenv("SYNTHESIA_AVATAR_ID")
-    if not avatar_id:
-        logger.warning(
-            "SYNTHESIA_AVATAR_ID is not configured in .env! "
-            "Please set a valid avatar ID from your Synthesia workspace gallery."
-        )
-
-    # Note: AvatarConfig takes a list of avatar IDs (the first is active)
-    avatar_ids = [avatar_id] if avatar_id else []
-    
-    if avatar_ids and os.getenv("SYNTHESIA_API_KEY"):
-        avatar = synthesia.AvatarSession(
-            synthesia.AvatarConfig(avatar_ids=avatar_ids),
-            join_timeout=45.0,
-        )
-        try:
-            # Crucial requirement: avatar.start() MUST be called BEFORE session.start()
-            logger.info("Starting Synthesia Avatar session with avatar ID: %s", avatar_id)
-            await avatar.start(session, room=ctx.room)
-            logger.info("Synthesia Avatar attached successfully.")
-        except synthesia.SynthesiaError as e:
-            logger.error("Synthesia integration error: %s (type=%s, retryable=%s)", e, e.type, e.retryable)
-            # If avatar fails, agent will continue in voice-only mode so interview demo does not crash
-    else:
-        logger.info("Running agent in voice-only mode (SYNTHESIA_API_KEY or SYNTHESIA_AVATAR_ID not set).")
-
-    # 3. Start Agent Session
+    # 2. Start Agent Session (direct TTS audio stream to room for 3D avatar)
     agent = SupportAgent(ctx.room)
     await session.start(agent=agent, room=ctx.room)
+
+    # 3. Handle user prompts from website UI chips via LiveKit data channel
+    @ctx.room.on("data_received")
+    def on_data_received(dp: rtc.DataPacket):
+        if dp.topic == "user_prompt":
+            try:
+                raw_text = dp.data.decode("utf-8")
+                text = raw_text
+                try:
+                    payload = json.loads(raw_text)
+                    if isinstance(payload, dict) and "text" in payload:
+                        text = payload["text"]
+                except Exception:
+                    pass
+
+                text = text.strip()
+                if text:
+                    logger.info(f"User clicked chip, generating reply for prompt: '{text}'")
+                    try:
+                        session.interrupt()
+                    except Exception:
+                        pass
+                    session.generate_reply(user_input=text)
+            except Exception as err:
+                logger.error(f"Error handling user prompt data packet: {err}")
 
     # 4. Initial spoken greeting (Introduces Alex, Apex Cloud Solutions, and core services without page movement)
     session.generate_reply(

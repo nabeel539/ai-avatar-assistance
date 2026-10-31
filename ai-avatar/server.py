@@ -90,8 +90,8 @@ def create_app() -> web.Application:
     async def serve_file(request: web.Request) -> web.FileResponse:
         filename = request.match_info["filename"]
         target = STATIC_DIR / filename
-        if target.is_file() and filename in {"style.css", "site.js", "knowledge.json"}:
-            return web.FileResponse(target)
+        if target.is_file() and filename in {"style.css", "site.js", "avatar3d.js", "knowledge.json"}:
+            return web.FileResponse(target, headers={"Cache-Control": "no-store"})
         raise web.HTTPNotFound()
 
     app.router.add_get("/{filename:.*\\.(?:css|js|json)}", serve_file)

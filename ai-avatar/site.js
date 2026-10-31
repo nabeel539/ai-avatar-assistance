@@ -2,9 +2,10 @@
  * Apex Cloud Solutions - Frontend Site Controller & LiveKit Bridge
  *
  * Responsibilities:
- * 1. Loosely coupled DOM interaction (SITE adapter with strict validation).
- * 2. LiveKit WebRTC client management for real-time video/audio avatar.
- * 3. Security: Validates every action against strict allowlists before DOM execution.
+ * 1. Loosely coupled DOM interaction (SITE adapter with strict validation and temporary highlights).
+ * 2. LiveKit WebRTC client management for real-time 3D interactive avatar.
+ * 3. Bridges audio track and agent states to window.avatar3d without duplicate playback.
+ * 4. Security: Validates every action against strict allowlists before DOM execution.
  */
 
 // ------------------------------------------------------------------------------
@@ -27,10 +28,41 @@ const ALLOWED_ELEMENTS = new Set([
   'refund-faq'
 ]);
 
+let highlightClearTimeout = null;
+
+function scheduleHighlightClear(delayMs = 6000) {
+  if (highlightClearTimeout) {
+    clearTimeout(highlightClearTimeout);
+  }
+  highlightClearTimeout = setTimeout(() => {
+    document.querySelectorAll('.section-active-highlight').forEach((el) => {
+      el.classList.remove('section-active-highlight');
+    });
+    document.querySelectorAll('.target-highlighted').forEach((el) => {
+      el.classList.remove('target-highlighted');
+    });
+  }, delayMs);
+}
+
+function clearAllHighlightsImmediate() {
+  if (highlightClearTimeout) {
+    clearTimeout(highlightClearTimeout);
+    highlightClearTimeout = null;
+  }
+  document.querySelectorAll('.section-active-highlight').forEach((el) => {
+    el.classList.remove('section-active-highlight');
+  });
+  document.querySelectorAll('.target-highlighted').forEach((el) => {
+    el.classList.remove('target-highlighted');
+  });
+}
+
 window.SITE = {
+  scheduleHighlightClear,
+  clearAllHighlightsImmediate,
+
   /**
-   * Scroll smoothly to an approved page section and highlight the entire section.
-   * All cards/items within the section are highlighted together while discussing.
+   * Scroll smoothly to an approved page section and temporarily highlight the entire section.
    * @param {Object} args - Payload containing { section }
    */
   navigate_to({ section } = {}) {
@@ -38,25 +70,24 @@ window.SITE = {
       console.warn(`[SITE Security] Rejected unapproved navigation target: ${section}`);
       return;
     }
-    // Clear previous section and card highlights
-    document.querySelectorAll('.section-active-highlight').forEach((el) => {
-      el.classList.remove('section-active-highlight');
-    });
-    document.querySelectorAll('.target-highlighted').forEach((el) => {
-      el.classList.remove('target-highlighted');
-    });
+    clearAllHighlightsImmediate();
 
     const target = document.getElementById(section);
     if (target) {
-      // Highlight the whole section (all cards within it are highlighted)
       target.classList.add('section-active-highlight');
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      console.log(`[SITE] Scrolled to and highlighted entire section: #${section}`);
+      console.log(`[SITE] Scrolled to and temporarily highlighted section: #${section}`);
+      scheduleHighlightClear(12000);
+
+      // Trigger avatar hand pointing towards the referenced section
+      if (window.avatar3d && typeof window.avatar3d.pointToContent === 'function') {
+        window.avatar3d.pointToContent(3.8);
+      }
     }
   },
 
   /**
-   * Highlight an approved card or element and sustain the highlight while discussing.
+   * Highlight an approved card or element temporarily while explaining.
    * @param {Object} args - Payload containing { element_id }
    */
   highlight_element({ element_id } = {}) {
@@ -64,16 +95,19 @@ window.SITE = {
       console.warn(`[SITE Security] Rejected unapproved element ID: ${element_id}`);
       return;
     }
-    // Remove previous single element highlights
-    document.querySelectorAll('.target-highlighted').forEach((el) => {
-      el.classList.remove('target-highlighted');
-    });
+    clearAllHighlightsImmediate();
 
     const target = document.getElementById(element_id);
     if (target) {
       target.classList.add('target-highlighted');
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      console.log(`[SITE] Sustained highlight on element: #${element_id}`);
+      console.log(`[SITE] Temporarily highlighted element: #${element_id}`);
+      scheduleHighlightClear(12000);
+
+      // Trigger avatar hand pointing towards the referenced element
+      if (window.avatar3d && typeof window.avatar3d.pointToContent === 'function') {
+        window.avatar3d.pointToContent(3.8);
+      }
     }
   },
 
@@ -102,35 +136,59 @@ window.SITE = {
   },
 
   /**
-   * Helper for prompt chip clicks to guide the user.
+   * Submit a chip prompt question directly to Alex for an immediate spoken answer.
    */
   suggestPrompt(promptText) {
     this.openAvatarWidget();
-    console.log(`[SITE Prompt] User clicked prompt: "${promptText}". Ready to speak to Alex.`);
-    const subtitle = document.getElementById('agent-state-label');
-    if (subtitle && !window.currentLiveKitRoom) {
-      subtitle.textContent = `Click "Call" & ask: "${promptText}"`;
+    console.log(`[SITE Prompt] User clicked chip: "${promptText}". Requesting answer from Alex...`);
+
+    const stateLabel = document.getElementById('agent-state-label');
+    if (stateLabel && (!window.currentLiveKitRoom || window.currentLiveKitRoom.state !== 'connected')) {
+      stateLabel.textContent = 'CONNECTING...';
+    }
+
+    if (window.sendUserPrompt) {
+      window.sendUserPrompt(promptText);
     }
   }
 };
 
 
 // ------------------------------------------------------------------------------
-// 2. LiveKit Client & Avatar Session Bridge
+// 2. LiveKit Client & 3D Avatar Session Bridge
 // ------------------------------------------------------------------------------
 
 (function initAvatarBridge() {
-  const videoElem = document.getElementById('avatar-video');
+  const canvasElem = document.getElementById('avatar-canvas');
+  const audioElem = document.getElementById('agent-audio');
   const videoPlaceholder = document.getElementById('video-placeholder');
   const sessionBtn = document.getElementById('btn-session-toggle');
   const statusDot = document.getElementById('connection-status-dot');
-  const statusText = document.getElementById('connection-status-text');
   const stateLabel = document.getElementById('agent-state-label');
   const micIndicator = document.getElementById('mic-indicator');
   const errorBanner = document.getElementById('widget-error');
 
   let room = null;
   window.currentLiveKitRoom = null;
+
+  // Listen for 3D Avatar ready event
+  window.addEventListener('avatar3d:ready', () => {
+    if (videoPlaceholder) {
+      videoPlaceholder.classList.add('hidden');
+    }
+    console.log('[LiveKit Bridge] 3D Avatar is ready.');
+  });
+
+  // Clicking avatar preview triggers explanatory gesture to content
+  if (canvasElem) {
+    canvasElem.style.cursor = 'pointer';
+    canvasElem.title = 'Click avatar to preview content gesture';
+    canvasElem.addEventListener('click', () => {
+      if (window.avatar3d && typeof window.avatar3d.pointToContent === 'function') {
+        window.avatar3d.pointToContent(4.0);
+      }
+    });
+  }
 
   function updateButton(state) {
     if (!sessionBtn) return;
@@ -152,12 +210,14 @@ window.SITE = {
     if (state === 'connected') {
       if (statusDot) statusDot.className = 'status-marker listening';
       if (stateLabel) stateLabel.textContent = 'LISTENING';
+      if (window.avatar3d) window.avatar3d.setAgentState('listening');
     } else if (state === 'connecting') {
       if (statusDot) statusDot.className = 'status-marker';
       if (stateLabel) stateLabel.textContent = 'CONNECTING';
     } else {
       if (statusDot) statusDot.className = 'status-marker';
       if (stateLabel) stateLabel.textContent = 'READY';
+      if (window.avatar3d) window.avatar3d.setAgentState('idle');
     }
     updateButton(state);
   }
@@ -177,7 +237,39 @@ window.SITE = {
     }
   }
 
-  async function startSession() {
+  let queuedPrompt = null;
+
+  // Send a prompt to the AI agent over LiveKit data channel
+  window.sendUserPrompt = async function(promptText) {
+    if (!promptText) return;
+
+    // Unblock browser Web Audio context on user gesture
+    if (room && typeof room.startAudio === 'function') {
+      room.startAudio().catch(() => {});
+    }
+    if (window.avatar3d && typeof window.avatar3d.resumeAudio === 'function') {
+      window.avatar3d.resumeAudio();
+    }
+
+    if (!room || room.state !== 'connected') {
+      console.log(`[LiveKit Prompt] Connecting session to answer: "${promptText}"`);
+      queuedPrompt = promptText;
+      await startSession(promptText);
+      return;
+    }
+
+    try {
+      const payload = new TextEncoder().encode(JSON.stringify({ text: promptText }));
+      await room.localParticipant.publishData(payload, { reliable: true, topic: 'user_prompt' });
+      console.log(`[LiveKit Prompt] Published user prompt to Alex: "${promptText}"`);
+      if (stateLabel) stateLabel.textContent = 'THINKING...';
+    } catch (err) {
+      console.error('[LiveKit Prompt] Failed to send user prompt:', err);
+    }
+  };
+
+  async function startSession(initialPrompt = null) {
+    if (initialPrompt) queuedPrompt = initialPrompt;
     clearError();
     updateStatus('connecting', 'Connecting…');
 
@@ -198,17 +290,38 @@ window.SITE = {
 
       // 3. Instantiate LiveKit room
       room = new Room({
-        adaptiveStream: false, // Maintain full resolution for avatar video stream
+        adaptiveStream: false,
         dynacast: true,
       });
       window.currentLiveKitRoom = room;
 
-      // 4. Attach remote avatar audio & video tracks
-      room.on(RoomEvent.TrackSubscribed, (track) => {
-        console.log(`[LiveKit] Subscribed to ${track.kind} track from avatar.`);
-        if (track.kind === 'video' || track.kind === 'audio') {
-          track.attach(videoElem);
-          if (videoPlaceholder) videoPlaceholder.classList.add('hidden');
+      // 4. Attach remote avatar audio track (guarded against duplicate/local audio)
+      room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        if (track.kind === 'audio' && participant && !participant.isLocal) {
+          console.log(`[LiveKit] Subscribed to remote audio track from ${participant.identity}.`);
+
+          // Playback via the single dedicated audio tag
+          if (audioElem) {
+            if (audioElem.srcObject) {
+              audioElem.srcObject = null;
+            }
+            track.attach(audioElem);
+          }
+
+          // Feed same MediaStreamTrack into Avatar3D Web Audio analyser
+          if (window.avatar3d && window.avatar3d.attachAudioTrack) {
+            window.avatar3d.attachAudioTrack(track.mediaStreamTrack);
+          } else {
+            window.addEventListener('avatar3d:ready', () => {
+              if (window.avatar3d && window.avatar3d.attachAudioTrack) {
+                window.avatar3d.attachAudioTrack(track.mediaStreamTrack);
+              }
+            }, { once: true });
+          }
+
+          if (videoPlaceholder) {
+            videoPlaceholder.classList.add('hidden');
+          }
         }
       });
 
@@ -232,6 +345,16 @@ window.SITE = {
               statusDot.className = 'status-marker';
             }
           }
+
+          // Relay state to 3D avatar animation controller
+          if (window.avatar3d) {
+            window.avatar3d.setAgentState(state);
+          }
+
+          // When speech finishes, clear highlights after a short grace period
+          if (state !== 'speaking') {
+            scheduleHighlightClear(4500);
+          }
         }
       });
 
@@ -254,10 +377,13 @@ window.SITE = {
         }
       });
 
-      // 7. Local mic activity indicator
+      // 7. Local mic activity indicator & 3D avatar listening pose
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
         const isLocalSpeaking = speakers.some((s) => s.isLocal);
         if (micIndicator) micIndicator.classList.toggle('on', isLocalSpeaking);
+        if (window.avatar3d) {
+          window.avatar3d.setUserSpeaking(isLocalSpeaking);
+        }
       });
 
       // 8. Handle disconnection
@@ -268,13 +394,33 @@ window.SITE = {
 
       // 9. Connect to LiveKit Cloud Room and enable user microphone
       await room.connect(url, token);
-      await room.localParticipant.setMicrophoneEnabled(true);
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (micErr) {
+        console.warn('[LiveKit] Microphone optional or permission withheld:', micErr);
+      }
 
       updateStatus('connected', 'Connected');
 
+      // If user clicked a prompt chip to start, send it immediately
+      if (queuedPrompt) {
+        const text = queuedPrompt;
+        queuedPrompt = null;
+        setTimeout(async () => {
+          try {
+            const payload = new TextEncoder().encode(JSON.stringify({ text }));
+            await room.localParticipant.publishData(payload, { reliable: true, topic: 'user_prompt' });
+            console.log(`[LiveKit Prompt] Auto-sent initial prompt: "${text}"`);
+            if (stateLabel) stateLabel.textContent = 'THINKING...';
+          } catch (e) {
+            console.warn('[LiveKit Prompt] Error sending initial prompt:', e);
+          }
+        }, 1200);
+      }
+
     } catch (err) {
       console.error('[LiveKit Error]', err);
-      showError(err.message || 'Failed to connect to avatar.');
+      showError(err.message || 'Failed to connect to 3D avatar.');
       endSession();
     }
   }
@@ -290,24 +436,19 @@ window.SITE = {
       window.currentLiveKitRoom = null;
     }
 
-    if (videoElem) {
-      videoElem.srcObject = null;
-    }
-    if (videoPlaceholder) {
-      videoPlaceholder.classList.remove('hidden');
+    if (audioElem) {
+      audioElem.srcObject = null;
     }
     if (micIndicator) {
       micIndicator.classList.remove('on');
     }
 
-    // Clear all highlighted sections and elements when call ends
-    document.querySelectorAll('.section-active-highlight').forEach((el) => {
-      el.classList.remove('section-active-highlight');
-    });
-    document.querySelectorAll('.target-highlighted').forEach((el) => {
-      el.classList.remove('target-highlighted');
-    });
+    if (window.avatar3d) {
+      window.avatar3d.setAgentState('idle');
+      window.avatar3d.setUserSpeaking(false);
+    }
 
+    clearAllHighlightsImmediate();
     updateStatus('disconnected', 'Disconnected');
   }
 
@@ -327,14 +468,34 @@ window.SITE = {
     if (room && typeof room.startAudio === 'function') {
       room.startAudio();
     }
+    if (window.avatar3d && typeof window.avatar3d.resumeAudio === 'function') {
+      window.avatar3d.resumeAudio();
+    }
+  });
+
+  // Clean up WebRTC session when page or tab closes
+  window.addEventListener('beforeunload', () => {
+    if (room) {
+      try {
+        room.disconnect();
+      } catch (e) {}
+    }
   });
 
   // Automatically connect and load avatar when website loads
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(startSession, 500);
+    setTimeout(() => {
+      if (!room || room.state === 'disconnected') {
+        startSession();
+      }
+    }, 500);
   } else {
     window.addEventListener('DOMContentLoaded', () => {
-      setTimeout(startSession, 500);
+      setTimeout(() => {
+        if (!room || room.state === 'disconnected') {
+          startSession();
+        }
+      }, 500);
     });
   }
 })();
